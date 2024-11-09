@@ -1,0 +1,4 @@
+[gd_resource type="EditorSettings" format=2]
+
+[resource]
+export/android/android_sdk_path = GODOT_ANDROID_SDK_PATH

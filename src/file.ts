@@ -2,22 +2,16 @@ import { BuildResult } from './types/GodotExport';
 import path from 'path';
 import * as io from '@actions/io';
 import { exec } from '@actions/exec';
-import {
-  ARCHIVE_ROOT_FOLDER,
-  GODOT_ARCHIVE_PATH,
-  GODOT_PROJECT_PATH,
-  RELATIVE_EXPORT_PATH,
-  USE_PRESET_EXPORT_PATH,
-} from './constants';
+import { Opts } from './types/opts';
 import * as core from '@actions/core';
 
-async function zipBuildResults(buildResults: BuildResult[]): Promise<void> {
+async function zipBuildResults(buildResults: BuildResult[], opts: Opts): Promise<void> {
   core.startGroup('⚒️ Zipping binaries');
   const promises: Promise<void>[] = [];
   for (const buildResult of buildResults) {
     promises.push(
       (async function () {
-        await zipBuildResult(buildResult);
+        await zipBuildResult(buildResult, opts);
         core.info(`📦 Zipped ${buildResult.preset.name} to ${buildResult.archivePath}`);
       })(),
     );
@@ -26,10 +20,10 @@ async function zipBuildResults(buildResults: BuildResult[]): Promise<void> {
   core.endGroup();
 }
 
-async function zipBuildResult(buildResult: BuildResult): Promise<void> {
-  await io.mkdirP(GODOT_ARCHIVE_PATH);
+async function zipBuildResult(buildResult: BuildResult, opts: Opts): Promise<void> {
+  await io.mkdirP(opts.GODOT_ARCHIVE_PATH);
 
-  const zipPath = path.join(GODOT_ARCHIVE_PATH, `${buildResult.sanitizedName}.zip`);
+  const zipPath = path.join(opts.GODOT_ARCHIVE_PATH, `${buildResult.sanitizedName}.zip`);
 
   const isMac = buildResult.preset.platform.toLowerCase() === 'mac osx';
   const endsInDotApp = !!buildResult.preset.export_path.match('.app$');
@@ -42,25 +36,25 @@ async function zipBuildResult(buildResult: BuildResult): Promise<void> {
   }
 
   // 7zip automatically overwrites files that are in the way
-  await exec('7z', ['a', zipPath, `${buildResult.directory}${ARCHIVE_ROOT_FOLDER ? '' : '/*'}`]);
+  await exec('7z', ['a', zipPath, `${buildResult.directory}${opts.ARCHIVE_ROOT_FOLDER ? '' : '/*'}`]);
 
   buildResult.archivePath = zipPath;
 }
 
-async function moveBuildsToExportDirectory(buildResults: BuildResult[], moveArchived?: boolean): Promise<void> {
+async function moveBuildsToExportDirectory(buildResults: BuildResult[], opts: Opts): Promise<void> {
   core.startGroup(`➡️ Moving exports`);
   const promises: Promise<void>[] = [];
   for (const buildResult of buildResults) {
     const fullExportPath = path.resolve(
-      USE_PRESET_EXPORT_PATH
-        ? path.join(GODOT_PROJECT_PATH, path.dirname(buildResult.preset.export_path))
-        : RELATIVE_EXPORT_PATH,
+      opts.USE_PRESET_EXPORT_PATH
+        ? path.join(opts.GODOT_PROJECT_PATH, path.dirname(buildResult.preset.export_path))
+        : opts.RELATIVE_EXPORT_PATH,
     );
 
     await io.mkdirP(fullExportPath);
 
     let promise: Promise<void>;
-    if (moveArchived) {
+    if (opts.ARCHIVE_OUTPUT) {
       if (!buildResult.archivePath) {
         core.warning('Attempted to move export output that was not archived. Skipping');
         continue;

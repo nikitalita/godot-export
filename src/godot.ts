@@ -6,39 +6,20 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as ini from 'ini';
 import { ExportPresets, ExportPreset, BuildResult } from './types/GodotExport';
+import { Opts } from './types/opts';
 import sanitize from 'sanitize-filename';
-import {
-  GODOT_CONFIG_PATH,
-  GODOT_DOWNLOAD_URL,
-  GODOT_TEMPLATES_DOWNLOAD_URL,
-  GODOT_WORKING_PATH,
-  RELATIVE_PROJECT_PATH,
-  WINE_PATH,
-  EXPORT_DEBUG,
-  PRESETS_TO_EXPORT,
-  GODOT_VERBOSE,
-  GODOT_BUILD_PATH,
-  GODOT_PROJECT_FILE_PATH,
-  EXPORT_PACK_ONLY,
-  USE_GODOT_3,
-  GODOT_EXPORT_TEMPLATES_PATH,
-  CACHE_ACTIVE,
-  GODOT_PROJECT_PATH,
-  GODOT_ANDROID_SDK_PATH,
-} from './constants';
+import { getGodotAndroidSDKPath } from './constants';
 
 const GODOT_EXECUTABLE = 'godot_executable';
 const GODOT_ZIP = 'godot.zip';
 const GODOT_TEMPLATES_FILENAME = 'godot_templates.tpz';
-const EDITOR_SETTINGS_FILENAME = USE_GODOT_3 ? 'editor_settings-3.tres' : 'editor_settings-4.tres';
 const GODOT_ANDROID_SDK_SETTING = 'export/android/android_sdk_path';
-
-const GODOT_TEMPLATES_PATH = path.join(GODOT_WORKING_PATH, 'templates');
+const GODOT_ANDROID_SDK_PATH = getGodotAndroidSDKPath();
 
 let godotExecutablePath: string;
 
-async function exportBuilds(): Promise<BuildResult[]> {
-  if (!hasExportPresets()) {
+async function exportBuilds(opts: Opts): Promise<BuildResult[]> {
+  if (!hasExportPresets(opts)) {
     core.setFailed(
       'No export_presets.cfg found. Please ensure you have defined at least one export via the Godot editor.',
     );
@@ -46,54 +27,54 @@ async function exportBuilds(): Promise<BuildResult[]> {
   }
 
   core.startGroup('🕹️ Downloading Godot');
-  await downloadGodot();
+  await downloadGodot(opts);
   core.endGroup();
 
   core.startGroup('🔍 Adding Editor Settings');
-  await addEditorSettings();
+  await addEditorSettings(opts);
   core.endGroup();
 
-  if (WINE_PATH) {
-    configureWindowsExport();
+  if (opts.WINE_PATH) {
+    configureWindowsExport(opts);
   }
 
-  configureAndroidExport();
+  configureAndroidExport(opts);
 
-  if (!USE_GODOT_3) {
-    await importProject();
+  if (!opts.USE_GODOT_3) {
+    await importProject(opts);
   }
 
-  const results = await doExport();
+  const results = await doExport(opts);
   core.endGroup();
 
   return results;
 }
 
-function hasExportPresets(): boolean {
+function hasExportPresets(opts: Opts): boolean {
   try {
-    const projectPath = path.resolve(RELATIVE_PROJECT_PATH);
+    const projectPath = path.resolve(opts.RELATIVE_PROJECT_PATH);
     return fs.statSync(path.join(projectPath, 'export_presets.cfg')).isFile();
   } catch (e) {
     return false;
   }
 }
 
-async function downloadGodot(): Promise<void> {
-  await setupWorkingPath();
+async function downloadGodot(opts: Opts): Promise<void> {
+  await setupWorkingPath(opts);
 
-  await prepareExecutable();
+  await prepareExecutable(opts);
 
   core.info('Preparing templates');
-  if (USE_GODOT_3) {
-    await prepareTemplates3();
+  if (opts.USE_GODOT_3) {
+    await prepareTemplates3(opts);
   } else {
-    await prepareTemplates4();
+    await prepareTemplates4(opts);
   }
 }
 
-async function setupWorkingPath(): Promise<void> {
-  await io.mkdirP(GODOT_WORKING_PATH);
-  core.info(`Working path created ${GODOT_WORKING_PATH}`);
+async function setupWorkingPath(opts: Opts): Promise<void> {
+  await io.mkdirP(opts.GODOT_WORKING_PATH);
+  core.info(`Working path created ${opts.GODOT_WORKING_PATH}`);
 }
 
 async function downloadFile(
@@ -101,8 +82,9 @@ async function downloadFile(
   downloadUrl: string,
   cacheKey: string,
   restoreKey: string,
+  opts: Opts,
 ): Promise<void> {
-  if (CACHE_ACTIVE && isCacheFeatureAvailable()) {
+  if (opts.CACHE_ACTIVE && isCacheFeatureAvailable()) {
     const cacheHit = await restoreCache([filePath], cacheKey, [restoreKey]);
     if (cacheHit) {
       core.info(`Restored cached file from ${cacheHit}`);
@@ -111,23 +93,23 @@ async function downloadFile(
   }
   core.info(`Downloading file from ${downloadUrl}`);
   await exec('wget', ['-nv', downloadUrl, '-O', filePath]);
-  if (CACHE_ACTIVE && isCacheFeatureAvailable()) {
+  if (opts.CACHE_ACTIVE && isCacheFeatureAvailable()) {
     await saveCache([filePath], cacheKey);
   }
 }
 
-async function downloadTemplates(): Promise<void> {
-  const templatesPath = path.join(GODOT_WORKING_PATH, GODOT_TEMPLATES_FILENAME);
-  const cacheKey = `godot-templates-${GODOT_TEMPLATES_DOWNLOAD_URL}`;
-  const restoreKey = `godot-templates-${GODOT_TEMPLATES_DOWNLOAD_URL}`;
-  await downloadFile(templatesPath, GODOT_TEMPLATES_DOWNLOAD_URL, cacheKey, restoreKey);
+async function downloadTemplates(opts: Opts): Promise<void> {
+  const templatesPath = path.join(opts.GODOT_WORKING_PATH, GODOT_TEMPLATES_FILENAME);
+  const cacheKey = `godot-templates-${opts.GODOT_TEMPLATES_DOWNLOAD_URL}`;
+  const restoreKey = `godot-templates-${opts.GODOT_TEMPLATES_DOWNLOAD_URL}`;
+  await downloadFile(templatesPath, opts.GODOT_TEMPLATES_DOWNLOAD_URL, cacheKey, restoreKey, opts);
 }
 
-async function downloadExecutable(): Promise<void> {
-  const executablePath = path.join(GODOT_WORKING_PATH, GODOT_ZIP);
-  const cacheKey = `godot-executable-${GODOT_DOWNLOAD_URL}`;
-  const restoreKey = `godot-executable-${GODOT_DOWNLOAD_URL}`;
-  await downloadFile(executablePath, GODOT_DOWNLOAD_URL, cacheKey, restoreKey);
+async function downloadExecutable(opts: Opts): Promise<void> {
+  const executablePath = path.join(opts.GODOT_WORKING_PATH, GODOT_ZIP);
+  const cacheKey = `godot-executable-${opts.GODOT_DOWNLOAD_URL}`;
+  const restoreKey = `godot-executable-${opts.GODOT_DOWNLOAD_URL}`;
+  await downloadFile(executablePath, opts.GODOT_DOWNLOAD_URL, cacheKey, restoreKey, opts);
 }
 
 function isGhes(): boolean {
@@ -154,20 +136,17 @@ function isCacheFeatureAvailable(): boolean {
   return false;
 }
 
-async function prepareExecutable(): Promise<void> {
-  await downloadExecutable();
+async function prepareExecutable(opts: Opts): Promise<void> {
+  // await downloadExecutable(opts);
 
-  const zipFile = path.join(GODOT_WORKING_PATH, GODOT_ZIP);
-  let zipTo = path.join(GODOT_WORKING_PATH, GODOT_EXECUTABLE);
+  const zipFile = path.join(opts.GODOT_WORKING_PATH, GODOT_ZIP);
+  let zipTo = path.join(opts.GODOT_WORKING_PATH, GODOT_EXECUTABLE);
 
   core.info(`Extracting ${zipFile} to ${zipTo}`);
 
   if (process.platform === 'darwin') {
-    // 7zip doesn't recognize the zipped .app file correctly, and tries to extract the whole thing
-    // which results in it picking a single file from the .app and extracting it to the destination.
-    // Also note that we have to extract to the directory. Extracting to a file name will result in a corrupted executable.
-    await exec('ditto', ['-x', '-k', zipFile, GODOT_WORKING_PATH]);
-    zipTo = GODOT_WORKING_PATH;
+    await exec('ditto', ['-x', '-k', zipFile, opts.GODOT_WORKING_PATH]);
+    zipTo = opts.GODOT_WORKING_PATH;
     core.info(`Extracted ${zipFile} to ${zipTo}`);
   } else {
     await exec('7z', ['x', zipFile, `-o${zipTo}`, '-y']);
@@ -179,7 +158,6 @@ async function prepareExecutable(): Promise<void> {
   }
   core.info(`Found executable at ${executablePath}`);
 
-  // chmod not needed for both Windows and macOS
   if (process.platform !== 'darwin' && process.platform !== 'win32') {
     fs.chmodSync(executablePath, '755');
   }
@@ -187,50 +165,43 @@ async function prepareExecutable(): Promise<void> {
   godotExecutablePath = `"${executablePath}"`;
 }
 
-async function prepareTemplates3(): Promise<void> {
-  const templateFile = path.join(GODOT_WORKING_PATH, GODOT_TEMPLATES_FILENAME);
-  const tmpPath = path.join(GODOT_WORKING_PATH, 'tmp');
+async function prepareTemplates3(opts: Opts): Promise<void> {
+  const templateFile = path.join(opts.GODOT_WORKING_PATH, GODOT_TEMPLATES_FILENAME);
+  const tmpPath = path.join(opts.GODOT_WORKING_PATH, 'tmp');
   const godotVersion = await getGodotVersion();
-  const godotVersionTemplatesPath = path.join(GODOT_TEMPLATES_PATH, godotVersion);
+  const godotVersionTemplatesPath = path.join(opts.GODOT_TEMPLATES_PATH, godotVersion);
 
   if (!fs.existsSync(godotVersionTemplatesPath)) {
     core.info(`⬇️ Missing templates for Godot ${godotVersion}. Downloading...`);
-    await downloadTemplates();
+    await downloadTemplates(opts);
   } else {
     core.info(`✅ Found templates for Godot ${godotVersion} at ${godotVersionTemplatesPath}`);
     return;
   }
 
-  await exec('unzip', ['-q', templateFile, '-d', GODOT_WORKING_PATH]);
-  await exec('mv', [GODOT_TEMPLATES_PATH, tmpPath]);
-  await io.mkdirP(GODOT_TEMPLATES_PATH);
+  await exec('unzip', ['-q', templateFile, '-d', opts.GODOT_WORKING_PATH]);
+  await exec('mv', [opts.GODOT_TEMPLATES_PATH, tmpPath]);
+  await io.mkdirP(opts.GODOT_TEMPLATES_PATH);
   await exec('mv', [tmpPath, godotVersionTemplatesPath]);
 }
 
-async function prepareTemplates4(): Promise<void> {
-  const templateFile = path.join(GODOT_WORKING_PATH, GODOT_TEMPLATES_FILENAME);
+async function prepareTemplates4(opts: Opts): Promise<void> {
+  const templateFile = path.join(opts.GODOT_WORKING_PATH, GODOT_TEMPLATES_FILENAME);
   const godotVersion = await getGodotVersion();
-  const godotVersionTemplatesPath = path.join(GODOT_EXPORT_TEMPLATES_PATH, godotVersion);
+  const godotVersionTemplatesPath = path.join(opts.GODOT_EXPORT_TEMPLATES_PATH, godotVersion);
 
   if (!fs.existsSync(godotVersionTemplatesPath)) {
     core.info(`⬇️ Missing templates for Godot ${godotVersion}. Downloading...`);
-    await downloadTemplates();
+    await downloadTemplates(opts);
   } else {
     core.info(`✅ Found templates for Godot ${godotVersion} at ${godotVersionTemplatesPath}.`);
     return;
   }
 
-  // just unzipping straight to the target directoryu
   await io.mkdirP(godotVersionTemplatesPath);
-  // -j to ignore the directory structure in the zip file
-  // 4.1 templates are in a subdirectory, so we need to ignore that
   await exec('unzip', ['-o', '-j', templateFile, '-d', godotVersionTemplatesPath]);
 }
 
-/**
- * Extracts the Godot version from the executable. The version is a bit inconsistent, so pulling it from the executable is the most reliable way.
- * @returns The Godot version as a string.
- */
 async function getGodotVersion(): Promise<string> {
   let version = '';
   const options: ExecOptions = {
@@ -258,9 +229,6 @@ async function getGodotVersion(): Promise<string> {
   return version;
 }
 
-/**
- * Converts a number to an emoji number. For example, 123 becomes 1️⃣2️⃣3️⃣
- */
 function getEmojiNumber(number: number): string {
   const allEmojiNumbers = ['0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣'];
   let emojiNumber = '';
@@ -272,17 +240,17 @@ function getEmojiNumber(number: number): string {
   return emojiNumber;
 }
 
-async function doExport(): Promise<BuildResult[]> {
+async function doExport(opts: Opts): Promise<BuildResult[]> {
   const buildResults: BuildResult[] = [];
-  core.info(`🎯 Using project file at ${GODOT_PROJECT_FILE_PATH}`);
+  core.info(`🎯 Using project file at ${opts.GODOT_PROJECT_FILE_PATH}`);
 
   let exportPresetIndex = 0;
 
-  for (const preset of getExportPresets()) {
+  for (const preset of getExportPresets(opts)) {
     core.startGroup(`${getEmojiNumber(++exportPresetIndex)} Export binary for preset "${preset.name}"`);
 
     const sanitizedName = sanitize(preset.name);
-    const buildDir = path.join(GODOT_BUILD_PATH, sanitizedName);
+    const buildDir = path.join(opts.GODOT_BUILD_PATH, sanitizedName);
 
     let executablePath;
     if (preset.export_path) {
@@ -295,24 +263,25 @@ async function doExport(): Promise<BuildResult[]> {
       continue;
     }
 
-    if (EXPORT_PACK_ONLY) {
+    if (opts.EXPORT_PACK_ONLY) {
       executablePath += '.pck';
     }
 
     await io.mkdirP(buildDir);
-    let exportFlag = EXPORT_DEBUG ? '--export-debug' : '--export-release';
-    if (EXPORT_PACK_ONLY) {
+    let exportFlag = opts.EXPORT_DEBUG ? '--export-debug' : '--export-release';
+    if (opts.EXPORT_PACK_ONLY) {
       exportFlag = '--export-pack';
     }
-    if (USE_GODOT_3 && !EXPORT_PACK_ONLY) {
-      exportFlag = EXPORT_DEBUG ? '--export-debug' : '--export';
+    if (opts.USE_GODOT_3 && !opts.EXPORT_PACK_ONLY) {
+      exportFlag = opts.EXPORT_DEBUG ? '--export-debug' : '--export';
     }
+    const headlessFlag = opts.USE_GODOT_3 ? '--no-window' : '--headless';
 
-    let args = [GODOT_PROJECT_FILE_PATH, '--headless', exportFlag, preset.name, executablePath];
-    if (USE_GODOT_3) {
+    let args = [opts.GODOT_PROJECT_FILE_PATH, headlessFlag, exportFlag, preset.name, executablePath];
+    if (opts.USE_GODOT_3) {
       args = args.filter(x => x !== '--headless');
     }
-    if (GODOT_VERBOSE) {
+    if (opts.GODOT_VERBOSE) {
       args.push('--verbose');
     }
 
@@ -337,11 +306,6 @@ async function doExport(): Promise<BuildResult[]> {
   return buildResults;
 }
 
-/**
- * Breadth first recursive search for the Godot executable.
- * @param basePath
- * @returns
- */
 function findGodotExecutablePath(basePath: string): string | undefined {
   core.info(`🔍 Looking for Godot executable in ${basePath}`);
   const paths = fs.readdirSync(basePath);
@@ -355,7 +319,6 @@ function findGodotExecutablePath(basePath: string): string | undefined {
     if (isLinux) {
       return fullPath;
     } else if (isMac) {
-      // on a Mac, we need to target the executable inside the .app directory. MacOS abstractions are weird
       return path.join(fullPath, 'Contents', 'MacOS', 'Godot');
     } else {
       dirs.push(fullPath);
@@ -365,14 +328,15 @@ function findGodotExecutablePath(basePath: string): string | undefined {
   for (const dir of dirs) {
     return findGodotExecutablePath(dir);
   }
+  core.warning('Could not find Godot executable');
   return undefined;
 }
 
-function getExportPresets(): ExportPreset[] {
+function getExportPresets(opts: Opts): ExportPreset[] {
   const exportPresets: ExportPreset[] = [];
-  const projectPath = path.resolve(RELATIVE_PROJECT_PATH);
+  const projectPath = path.resolve(opts.RELATIVE_PROJECT_PATH);
 
-  if (!hasExportPresets()) {
+  if (!hasExportPresets(opts)) {
     throw new Error(`Could not find export_presets.cfg in ${projectPath}`);
   }
 
@@ -384,8 +348,7 @@ function getExportPresets(): ExportPreset[] {
     for (const key in presets.preset) {
       const currentPreset = presets.preset[key];
 
-      // If no presets are specified, export all of them. Otherwise only specified presets are exported.
-      if (PRESETS_TO_EXPORT == null || PRESETS_TO_EXPORT.includes(currentPreset.name)) {
+      if (opts.PRESETS_TO_EXPORT == null || opts.PRESETS_TO_EXPORT.includes(currentPreset.name)) {
         exportPresets.push(currentPreset);
       } else {
         core.info(`🚫 Skipping export preset "${currentPreset.name}"`);
@@ -398,7 +361,8 @@ function getExportPresets(): ExportPreset[] {
   return exportPresets;
 }
 
-async function editEditorSettings(editorSettingsPath: string): Promise<boolean> {
+async function editEditorSettings(opts: Opts): Promise<boolean> {
+  const editorSettingsPath = path.join(opts.GODOT_CONFIG_PATH, opts.EDITOR_SETTINGS_FILENAME);
   let editorSettings = fs.readFileSync(editorSettingsPath, { encoding: 'utf8' });
   // check if the editor settings file is empty
   if (!editorSettings) {
@@ -440,32 +404,34 @@ async function editEditorSettings(editorSettingsPath: string): Promise<boolean> 
   return true;
 }
 
-async function addEditorSettings(): Promise<void> {
-  const editorSettingsDist = path.join(__dirname, EDITOR_SETTINGS_FILENAME);
-  const editorSettingsPath = path.join(GODOT_CONFIG_PATH, EDITOR_SETTINGS_FILENAME);
+async function addEditorSettings(opts: Opts): Promise<void> {
+  const editorSettingsDist = path.join(__dirname, opts.EDITOR_SETTINGS_FILENAME);
+  const editorSettingsPath = path.join(opts.GODOT_CONFIG_PATH, opts.EDITOR_SETTINGS_FILENAME);
 
-  if (fs.existsSync(editorSettingsDist) && (await editEditorSettings(editorSettingsPath))) {
+  if (fs.existsSync(editorSettingsPath) && (await editEditorSettings(opts))) {
     core.info(`Wrote editor settings to ${editorSettingsPath}`);
     return;
   }
-  await io.mkdirP(GODOT_CONFIG_PATH);
+
+  await io.mkdirP(opts.GODOT_CONFIG_PATH);
+
   let editorSettings = fs.readFileSync(editorSettingsDist, { encoding: 'utf8' });
   editorSettings = editorSettings.replace('GODOT_ANDROID_SDK_PATH', GODOT_ANDROID_SDK_PATH);
   fs.writeFileSync(editorSettingsPath, editorSettings, { flag: 'w' });
   core.info(`Wrote editor settings to ${editorSettingsPath}`);
 }
 
-function configureWindowsExport(): void {
+function configureWindowsExport(opts: Opts): void {
   core.startGroup('📝 Appending Wine editor settings');
   const rceditPath = path.join(__dirname, 'rcedit-x64.exe');
   const linesToWrite: string[] = [];
 
   core.info(`Writing rcedit path to editor settings ${rceditPath}`);
-  core.info(`Writing wine path to editor settings ${WINE_PATH}`);
+  core.info(`Writing wine path to editor settings ${opts.WINE_PATH}`);
 
-  const editorSettingsPath = path.join(GODOT_CONFIG_PATH, EDITOR_SETTINGS_FILENAME);
+  const editorSettingsPath = path.join(opts.GODOT_CONFIG_PATH, opts.EDITOR_SETTINGS_FILENAME);
   linesToWrite.push(`export/windows/rcedit = "${rceditPath}"\n`);
-  linesToWrite.push(`export/windows/wine = "${WINE_PATH}"\n`);
+  linesToWrite.push(`export/windows/wine = "${opts.WINE_PATH}"\n`);
 
   fs.writeFileSync(editorSettingsPath, linesToWrite.join(''), { flag: 'a' });
 
@@ -474,21 +440,13 @@ function configureWindowsExport(): void {
   core.endGroup();
 }
 
-function configureAndroidExport(): void {
+function configureAndroidExport(opts: Opts): void {
   core.startGroup('📝 Configuring android export');
 
-  // nothing to write here at the moment
-  // const editorSettingsPath = path.join(GODOT_CONFIG_PATH, EDITOR_SETTINGS_FILENAME);
-  // const linesToWrite: string[] = [];
-
-  // fs.writeFileSync(editorSettingsPath, linesToWrite.join(''), { flag: 'a' });
-
-  // making the gradlew executable only on unix systems
-  // if the file is not executable, the build will typically fail in incredibly cryptic ways
   if (process.platform !== 'win32') {
     try {
-      if (fs.existsSync(path.join(GODOT_PROJECT_PATH, 'android/build/gradlew'))) {
-        fs.chmodSync(path.join(GODOT_PROJECT_PATH, 'android/build/gradlew'), '755');
+      if (fs.existsSync(path.join(opts.GODOT_PROJECT_PATH, 'android/build/gradlew'))) {
+        fs.chmodSync(path.join(opts.GODOT_PROJECT_PATH, 'android/build/gradlew'), '755');
       }
       core.info('Made gradlew executable.');
     } catch (error) {
@@ -498,17 +456,14 @@ function configureAndroidExport(): void {
     }
   }
 
-  // core.info(linesToWrite.join(''));
-  // core.info(`Wrote Android settings to ${editorSettingsPath}`);
   core.endGroup();
 }
 
-/** Open the editor in headless mode once, to import all assets, creating the `.godot` directory if it doesn't exist. */
-async function importProject(): Promise<void> {
+async function importProject(opts: Opts): Promise<void> {
   core.startGroup('🎲 Import project');
-  // this import tends to fail on MacOS for some reason (exit code 1), but a fail here doesn't necessarily mean the export will fail
   try {
-    await exec(godotExecutablePath, [GODOT_PROJECT_FILE_PATH, '--headless', '-e', '--quit']);
+    const headlessFlag = opts.USE_GODOT_3 ? '--no-window' : '--headless';
+    await exec(godotExecutablePath, [opts.GODOT_PROJECT_FILE_PATH, headlessFlag, '-e', '--quit']);
   } catch (error) {
     core.warning(`Import appears to have failed. Continuing anyway, but exports may fail. ${error}`);
   }
