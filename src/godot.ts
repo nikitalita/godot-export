@@ -24,12 +24,14 @@ import {
   GODOT_EXPORT_TEMPLATES_PATH,
   CACHE_ACTIVE,
   GODOT_PROJECT_PATH,
+  GODOT_ANDROID_SDK_PATH,
 } from './constants';
 
 const GODOT_EXECUTABLE = 'godot_executable';
 const GODOT_ZIP = 'godot.zip';
 const GODOT_TEMPLATES_FILENAME = 'godot_templates.tpz';
 const EDITOR_SETTINGS_FILENAME = USE_GODOT_3 ? 'editor_settings-3.tres' : 'editor_settings-4.tres';
+const GODOT_ANDROID_SDK_SETTING = 'export/android/android_sdk_path';
 
 const GODOT_TEMPLATES_PATH = path.join(GODOT_WORKING_PATH, 'templates');
 
@@ -398,10 +400,12 @@ function getExportPresets(): ExportPreset[] {
 
 async function addEditorSettings(): Promise<void> {
   const editorSettingsDist = path.join(__dirname, EDITOR_SETTINGS_FILENAME);
-  await io.mkdirP(GODOT_CONFIG_PATH);
-
   const editorSettingsPath = path.join(GODOT_CONFIG_PATH, EDITOR_SETTINGS_FILENAME);
-  await io.cp(editorSettingsDist, editorSettingsPath, { force: false });
+
+  await io.mkdirP(GODOT_CONFIG_PATH);
+  let editorSettings = fs.readFileSync(editorSettingsDist, { encoding: 'utf8' });
+  editorSettings = editorSettings.replace('GODOT_ANDROID_SDK_PATH', GODOT_ANDROID_SDK_PATH);
+  fs.writeFileSync(editorSettingsPath, editorSettings, { flag: 'w' });
   core.info(`Wrote editor settings to ${editorSettingsPath}`);
 }
 

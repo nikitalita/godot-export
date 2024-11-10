@@ -6,7 +6,7 @@
   "scripts": {
     "build": "yarn lint && ncc build ./src/main.ts -o dist && shx rm -rf dist/godot-export",
     "build-debug": "yarn lint && ncc build ./src/main.ts -s -o dist && shx rm -rf dist/godot-export",
-    "test": "node ./dist/index.js",
+    "test": "node ./dist/index.js --test",
     "lint": "eslint . --ext .ts"
   },
   "repository": {

@@ -33,30 +33,50 @@ if (exportPresetsStr !== '') {
   }
 }
 
-const godotLocalDirs: { [key in 'darwin' | 'linux' | 'win32']: string } = {
+// supported platforms type
+type SupportedPlatforms = 'darwin' | 'linux' | 'win32';
+
+const godotLocalDirs: { [key in SupportedPlatforms]: string } = {
   darwin: '/Library/Application Support/Godot',
   linux: '/.local/share/godot',
   win32: '/AppData/Local/Godot',
 };
 
-const godotConfigDirs: { [key in 'darwin' | 'linux' | 'win32']: string } = {
+const godotConfigDirs: { [key in SupportedPlatforms]: string } = {
   darwin: '/Library/Application Support/Godot',
   linux: '/.config/godot',
   win32: '/AppData/Local/Godot',
 };
 
-function getGodotLocalDir(): string {
-  if (!(process.platform in godotLocalDirs)) {
+const godotAndroidSDKPaths: { [key in SupportedPlatforms]: string } = {
+  darwin: '/usr/local/lib/android/sdk',
+  linux: path.join(os.homedir(), 'Android/Sdk'),
+  win32: path.join(os.homedir(), 'AppData/Local/Android/Sdk'),
+};
+
+const supportedPlatforms: SupportedPlatforms[] = ['darwin', 'linux', 'win32'];
+
+function checkPlatform(): void {
+  if (!supportedPlatforms.includes(process.platform as SupportedPlatforms)) {
     throw new Error(`Unsupported platform: ${process.platform}`);
   }
-  return godotLocalDirs[process.platform as 'darwin' | 'linux' | 'win32'];
+}
+
+function getGodotLocalDir(): string {
+  checkPlatform();
+  return godotLocalDirs[process.platform as SupportedPlatforms];
 }
 
 function getGodotConfigDir(): string {
-  if (!(process.platform in godotConfigDirs)) {
-    throw new Error(`Unsupported platform: ${process.platform}`);
-  }
-  return godotConfigDirs[process.platform as 'darwin' | 'linux' | 'win32'];
+  checkPlatform();
+
+  return godotConfigDirs[process.platform as SupportedPlatforms];
+}
+
+function getGodotAndroidSDKPath(): string {
+  checkPlatform();
+
+  return godotAndroidSDKPaths[process.platform as SupportedPlatforms];
 }
 
 const PRESETS_TO_EXPORT = exportPresets;
@@ -68,7 +88,7 @@ const GODOT_BUILD_PATH = path.join(GODOT_WORKING_PATH, 'builds');
 const GODOT_ARCHIVE_PATH = path.join(GODOT_WORKING_PATH, 'archives');
 const GODOT_PROJECT_PATH = path.resolve(path.join(RELATIVE_PROJECT_PATH));
 const GODOT_PROJECT_FILE_PATH = path.join(GODOT_PROJECT_PATH, 'project.godot');
-
+const GODOT_ANDROID_SDK_PATH = getGodotAndroidSDKPath();
 export {
   ARCHIVE_OUTPUT,
   ARCHIVE_ROOT_FOLDER,
@@ -84,6 +104,7 @@ export {
   GODOT_EXPORT_TEMPLATES_PATH,
   GODOT_PROJECT_FILE_PATH,
   GODOT_PROJECT_PATH,
+  GODOT_ANDROID_SDK_PATH,
   GODOT_TEMPLATES_DOWNLOAD_URL,
   GODOT_VERBOSE,
   GODOT_WORKING_PATH,
