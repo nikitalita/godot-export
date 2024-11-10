@@ -398,10 +398,56 @@ function getExportPresets(): ExportPreset[] {
   return exportPresets;
 }
 
+async function editEditorSettings(editorSettingsPath: string): Promise<boolean> {
+  let editorSettings = fs.readFileSync(editorSettingsPath, { encoding: 'utf8' });
+  // check if the editor settings file is empty
+  if (!editorSettings) {
+    return false;
+  }
+  // check if GODOT_ANDROID_SDK_SETTING exists
+  if (editorSettings.includes(GODOT_ANDROID_SDK_SETTING)) {
+    // get the line that includes the setting
+    const settingLine = editorSettings.match(new RegExp(`${GODOT_ANDROID_SDK_SETTING}.*`));
+    if (settingLine) {
+      const setting = settingLine.toString().split('=')[1].trim();
+      if (setting === GODOT_ANDROID_SDK_SETTING) {
+        core.info(`Editor settings file already contains ${GODOT_ANDROID_SDK_SETTING}`);
+        return true;
+      }
+      editorSettings.replace(settingLine.toString(), `${GODOT_ANDROID_SDK_SETTING} = "${GODOT_ANDROID_SDK_PATH}"`);
+    } else {
+      core.error(`Could not find setting line for ${GODOT_ANDROID_SDK_SETTING}`);
+      return true;
+    }
+  } else {
+    // otherwise, find the [resource] tag and add the setting after it
+    const resourceTag = '[resource]';
+    const resourceIndex = editorSettings.indexOf(resourceTag);
+    if (resourceIndex === -1) {
+      core.warning(`Could not find [resource] tag in editor settings file ${editorSettingsPath}`);
+      editorSettings += '\n[resource]\n';
+    }
+    // add the setting after the [resource] tag
+    editorSettings = editorSettings.replace(
+      `${resourceTag}`,
+      `${resourceTag}\n${GODOT_ANDROID_SDK_SETTING} = "${GODOT_ANDROID_SDK_PATH}"\n`,
+    );
+  }
+
+  // write to the file
+  fs.writeFileSync(editorSettingsPath, editorSettings, { flag: 'w' });
+
+  return true;
+}
+
 async function addEditorSettings(): Promise<void> {
   const editorSettingsDist = path.join(__dirname, EDITOR_SETTINGS_FILENAME);
   const editorSettingsPath = path.join(GODOT_CONFIG_PATH, EDITOR_SETTINGS_FILENAME);
 
+  if (fs.existsSync(editorSettingsDist) && (await editEditorSettings(editorSettingsPath))) {
+    core.info(`Wrote editor settings to ${editorSettingsPath}`);
+    return;
+  }
   await io.mkdirP(GODOT_CONFIG_PATH);
   let editorSettings = fs.readFileSync(editorSettingsDist, { encoding: 'utf8' });
   editorSettings = editorSettings.replace('GODOT_ANDROID_SDK_PATH', GODOT_ANDROID_SDK_PATH);
