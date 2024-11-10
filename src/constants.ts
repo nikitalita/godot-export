@@ -33,18 +33,37 @@ if (exportPresetsStr !== '') {
   }
 }
 
+const godotLocalDirs: { [key in 'darwin' | 'linux' | 'win32']: string } = {
+  darwin: '/Library/Application Support/Godot',
+  linux: '/.local/share/godot',
+  win32: '/AppData/Local/Godot',
+};
+
+const godotConfigDirs: { [key in 'darwin' | 'linux' | 'win32']: string } = {
+  darwin: '/Library/Application Support/Godot',
+  linux: '/.config/godot',
+  win32: '/AppData/Local/Godot',
+};
+
+function getGodotLocalDir(): string {
+  if (!(process.platform in godotLocalDirs)) {
+    throw new Error(`Unsupported platform: ${process.platform}`);
+  }
+  return godotLocalDirs[process.platform as 'darwin' | 'linux' | 'win32'];
+}
+
+function getGodotConfigDir(): string {
+  if (!(process.platform in godotConfigDirs)) {
+    throw new Error(`Unsupported platform: ${process.platform}`);
+  }
+  return godotConfigDirs[process.platform as 'darwin' | 'linux' | 'win32'];
+}
+
 const PRESETS_TO_EXPORT = exportPresets;
 
-const GODOT_WORKING_PATH = path.resolve(path.join(os.homedir(), '/.local/share/godot'));
-const GODOT_EXPORT_TEMPLATES_PATH = path.resolve(
-  path.join(
-    os.homedir(),
-    process.platform === 'darwin'
-      ? 'Library/Application Support/Godot/export_templates'
-      : '/.local/share/godot/export_templates',
-  ),
-);
-const GODOT_CONFIG_PATH = path.resolve(path.join(os.homedir(), '/.config/godot'));
+const GODOT_WORKING_PATH = path.resolve(path.join(os.homedir(), getGodotLocalDir()));
+const GODOT_EXPORT_TEMPLATES_PATH = path.resolve(path.join(os.homedir(), getGodotLocalDir(), 'export_templates'));
+const GODOT_CONFIG_PATH = path.resolve(path.join(os.homedir(), getGodotConfigDir()));
 const GODOT_BUILD_PATH = path.join(GODOT_WORKING_PATH, 'builds');
 const GODOT_ARCHIVE_PATH = path.join(GODOT_WORKING_PATH, 'archives');
 const GODOT_PROJECT_PATH = path.resolve(path.join(RELATIVE_PROJECT_PATH));
