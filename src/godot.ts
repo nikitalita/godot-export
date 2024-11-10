@@ -182,7 +182,7 @@ async function prepareExecutable(): Promise<void> {
     fs.chmodSync(executablePath, '755');
   }
 
-  godotExecutablePath = executablePath;
+  godotExecutablePath = `"${executablePath}"`;
 }
 
 async function prepareTemplates3(): Promise<void> {
