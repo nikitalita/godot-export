@@ -5,7 +5,8 @@
   "main": "lib/main.js",
   "scripts": {
     "build": "yarn lint && ncc build ./src/main.ts -o dist && shx rm -rf dist/godot-export",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "build-debug": "yarn lint && ncc build ./src/main.ts -s -o dist && shx rm -rf dist/godot-export",
+    "test": "node ./dist/index.js",
     "lint": "eslint . --ext .ts"
   },
   "repository": {
