@@ -1,0 +1,12 @@
+{
+  "require": [
+    "tsx",
+    "chai"
+  ],
+  "extension": [
+    "ts"
+  ],
+  "spec": "src/**/*.test.ts",
+  "timeout": 500000,
+  "reporter": "spec"
+}

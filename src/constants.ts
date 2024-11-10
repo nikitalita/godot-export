@@ -1,6 +1,10 @@
 import * as core from '@actions/core';
 import path from 'path';
 import * as os from 'os';
+import { setMockInputs } from './mock';
+if (process.argv && process.argv.length > 2 && process.argv[2] === '--test') {
+  setMockInputs();
+}
 
 const ARCHIVE_OUTPUT = core.getBooleanInput('archive_output');
 const CACHE_ACTIVE = core.getBooleanInput('cache');

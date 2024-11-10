@@ -6,3 +6,6 @@ lib/
 .mono/
 .godot
 .DS_Store
+test/
+.testfiles/
+test_projects/
